@@ -9,9 +9,10 @@
 try:
     import json
 except ImportError:
-    import simplejson
+    import simplejson as json
 
-
+from twisted.internet import defer
+from twisted.web.server import NOT_DONE_YET
 from twisted.web import http
 from twisted.web.resource import Resource as ResourceBase
 from .http import HTTPError, Response
@@ -46,15 +47,18 @@ class Resource(ResourceBase):
 
         This is where the incoming HTTP request first lands.
 
-        Dispatch the request to corresponging handler function based
+        Dispatch the request to corresponding handler function based
         on the request method (get/put/post/...).
         """
 
         try:
             m = getattr(self, request.method.lower(), None)
             if m:
-                response = self._executeMethod(m, request)
-                return self._prepareResponse(request, response)
+                d = defer.maybeDeferred(m, request, *self.args, **self.kw)
+                d.addCallback(self._createResponse)
+                d.addErrback(self._errorResponse)
+                d.addCallback(self._prepareResponse, request)
+                return NOT_DONE_YET
             else:
                 # let the base class handle 405
                 ResourceBase.render(self, request)
@@ -65,7 +69,14 @@ class Resource(ResourceBase):
                     request.path,
                     request.code if m else 501))
 
-    def _prepareResponse(self, request, response):
+    def _errorResponse(self, err):
+      """ Create error Response obect. """
+      try: 
+        err.raiseException()
+      except HTTPError, error:
+        return Response.fromError(error)
+
+    def _prepareResponse(self, response, request):
         """ Prepare the HTTP response.
 
         Set response code, headers and return body as a string.
@@ -74,20 +85,8 @@ class Resource(ResourceBase):
         request.setResponseCode(response.code)
         for k, v in response.headers.items():
             request.setHeader(k, v)
-        return response.content
-
-    def _executeMethod(self, method, request):
-        """ Execute the method that handles the request.
-
-        @return Response object
-        """
-
-        try:
-            data = method(request, *self.args, **self.kw)
-        except HTTPError, error:
-            return Response.fromError(error)
-        else:
-            return self._createResponse(data)
+        request.write(response.content)
+        request.finish()
 
     def _createResponse(self, data):
         """ Create successful Response object.

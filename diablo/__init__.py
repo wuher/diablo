@@ -29,6 +29,7 @@ def register_mappers():
     datamapper.manager.register_mapper(jsonmapper, 'application/json', 'json')
 
     # yaml mapper
+    datamapper.manager.register_mapper(yamlmapper, 'text/yaml', 'yaml')
     datamapper.manager.register_mapper(yamlmapper, 'application/yaml', 'yaml')
 
 register_mappers()

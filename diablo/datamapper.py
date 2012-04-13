@@ -5,9 +5,12 @@
 # Author: Janne Kuuskeri
 #
 
+"""
+Diablo DataMapper
+"""
+
 
 import re
-from django.utils.encoding import smart_unicode, smart_str
 from http import Response, BadRequest, NotAcceptable
 import util
 
@@ -21,7 +24,7 @@ class DataMapper(object):
     content_type = 'text/plain'
     charset = 'utf-8'
 
-    def format(self, response):
+    def encode(self, response):
         """ Format the data.
 
         In derived classed, it is usually better idea to override
@@ -36,7 +39,7 @@ class DataMapper(object):
         res.content = self._format_data(res.content, self.charset)
         return self._finalize_response(res)
 
-    def parse(self, data, charset=None):
+    def decode(self, data, charset=None):
         """ Parse the data.
 
         It is usually a better idea to override ``_parse_data()`` than
@@ -57,13 +60,13 @@ class DataMapper(object):
         """
 
         try:
-            return smart_unicode(data, charset)
+            return util.force_unicode(data, charset)
         except UnicodeDecodeError:
-            raise http.BadRequest('wrong charset')
+            raise BadRequest('wrong charset')
 
     def _encode_data(self, data):
         """ Encode string data. """
-        return smart_str(data, self.charset)
+        return util.smart_str(data, self.charset)
 
     def _format_data(self, data, charset):
         """ Format the data
@@ -146,9 +149,10 @@ class DataMapperManager(object):
 
         self._check_mapper(mapper)
         cont_type_names = self._get_content_type_names(content_type, shortname)
-        self._datamappers.update(dict([(name, mapper) for name in cont_type_names]))
+        mappers = dict([(name, mapper) for name in cont_type_names])
+        self._datamappers.update(mappers)
 
-    def select_formatter(self, request, resource):
+    def select_encoder(self, request, resource):
         """ Select appropriate formatter based on the request.
 
         :param request: the HTTP request
@@ -176,7 +180,7 @@ class DataMapperManager(object):
         # 6. use manager's default
         return self._get_default_mapper()
 
-    def select_parser(self, request, resource):
+    def select_decoder(self, request, resource):
         """ Select appropriate parser based on the request.
 
         :param request: the HTTP request
@@ -257,7 +261,7 @@ class DataMapperManager(object):
         :returns: the preferred mapper based on the accept header or ``None``.
         """
 
-        accept_header = request.getHeader("accept") or ""
+        accept_header = request.getHeader('accept') or ''
         accepts = util.parse_accept_header(accept_header)
         if not accepts:
             return None
@@ -265,7 +269,7 @@ class DataMapperManager(object):
         for accept in accepts:
             if accept[0] in self._datamappers:
                 return accept[0]
-        raise http.NotAcceptable()
+        raise NotAcceptable()
 
     def _get_name_from_url(self, request):
         """ Determine short name for the mapper based on the URL.
@@ -275,25 +279,25 @@ class DataMapperManager(object):
 
         :returns: short name of the mapper or ``None`` if not found.
         """
-        format = None
+        fmt = None
         if request.args.has_key('format'):
-            format = request.args.get('format')[0]
-        if not format:
+            fmt = request.args.get('format')[0]
+        if not fmt:
             match = self._format_query_pattern.match(request.path)
             if match and match.group('format'):
-                format = match.group('format')
-        return format
+                fmt = match.group('format')
+        return fmt
 
-    def _unknown_format(self, format):
+    def _unknown_format(self, fmt):
         """ Deal with the situation when we don't support the requested format.
 
         :raises: NotAcceptable always
         """
 
-        raise NotAcceptable('unknown data format: ' + format)
+        raise NotAcceptable('unknown data format: ' + fmt)
 
     def _get_content_type_names(self, content_type, shortname):
-        """ """
+        """ Get all named content types. """
         ret = [shortname, content_type] if shortname else [content_type]
 
         mtype, subtype = content_type.split('/', 1)
@@ -303,9 +307,9 @@ class DataMapperManager(object):
 
     def _check_mapper(self, mapper):
         """ Check that the mapper has valid signature. """
-        if not hasattr(mapper, 'parse') or not callable(mapper.parse):
+        if not hasattr(mapper, 'decode') or not callable(mapper.decode):
             raise ValueError('mapper must implement parse()')
-        if not hasattr(mapper, 'format') or not callable(mapper.format):
+        if not hasattr(mapper, 'encode') or not callable(mapper.encode):
             raise ValueError('mapper must implement format()')
 
 
@@ -313,13 +317,13 @@ class DataMapperManager(object):
 manager = DataMapperManager()
 
 # utility function to format outgoing data (selects formatter automatically)
-def format(request, response, resource):
-    return manager.select_formatter(request, resource).format(response)
+def encode(request, response, resource):
+    return manager.select_encoder(request, resource).encode(response)
 
 # utility function to parse incoming data (selects parser automatically)
-def parse(data, request, resource):
+def decode(data, request, resource):
     charset = util.get_charset(request)
-    return manager.select_parser(request, resource).parse(data, charset)
+    return manager.select_decoder(request, resource).decode(data, charset)
 
 
 #

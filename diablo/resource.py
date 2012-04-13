@@ -5,21 +5,15 @@
 # Author: Janne Kuuskeri
 #
 
-
-try:
-    import json
-except ImportError:
-    import simplejson as json
-
-import xmlrpclib, yaml
+"""
+Diablo Resource 
+"""
 
 from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
-from twisted.web import http
 from twisted.web.resource import Resource as ResourceBase
-from diablo.http import HTTPError, Response, InternalServerError
-import util, datamapper
-
+from .http import HTTPError, Response
+import datamapper
 
 
 class Resource(ResourceBase):
@@ -56,16 +50,15 @@ class Resource(ResourceBase):
         Dispatch the request to corresponding handler function based
         on the request method (get/put/post/...).
         """
-        #self.content_type = request.getHeader('content-type') or 'application/json'
 
         try:
-            m = getattr(self, request.method.lower(), None)
-            if m:
+            method = getattr(self, request.method.lower(), None)
+            if method:
                 data = self._get_input_data(request)
-                d = defer.maybeDeferred(m, request, data, *self.args, **self.kw)
-                d.addCallback(self._createResponse, request)
-                d.addErrback(self._errorResponse)
-                d.addCallback(self._prepareResponse, request)
+                deferred = self._execute(method, request, data)
+                deferred.addCallback(self._createResponse, request)
+                deferred.addErrback(self._errorResponse)
+                deferred.addCallback(self._prepareResponse, request)
                 return NOT_DONE_YET
             else:
                 # let the base class handle 405
@@ -75,14 +68,25 @@ class Resource(ResourceBase):
                 self._log.info('"%s %s" %d' % (
                     request.method,
                     request.path,
-                    request.code if m else 501))
+                    request.code if method else 501))
+    
+    def _execute(self, method, request, data):
+        """ Actually invoke the handler function
+
+        Returns a deferred depending on if it is a data method.
+        """
+        if self._is_data_method(request):
+            return defer.maybeDeferred(method, request, data, 
+                                       *self.args, **self.kw)
+        else:
+            return defer.maybeDeferred(method, request, *self.args, **self.kw)
 
     def _errorResponse(self, err):
-      """ Create error Response obect. """
-      try: 
-        err.raiseException()
-      except HTTPError, error:
-        return Response.fromError(error)
+        """ Create error Response obect. """
+        try: 
+            err.raiseException()
+        except HTTPError, error:
+            return Response.fromError(error)
 
     def _prepareResponse(self, response, request):
         """ Prepare the HTTP response.
@@ -91,19 +95,17 @@ class Resource(ResourceBase):
         """
 
         request.setResponseCode(response.code)
-        for k, v in response.headers.items():
-            request.setHeader(k, v)
+        for key, value in response.headers.items():
+            request.setHeader(key, value)
         request.write(response.content)
         request.finish()
+        return NOT_DONE_YET
 
     def _createResponse(self, data, request):
-        """ Create successful Response object.
-
-        todo: support for different formats
-        """
-        res = datamapper.format(request, data, self)
+        """ Create successful Response object. """
+        res = datamapper.encode(request, data, self)
         if res.code is 0:
-          res.code = 200
+            res.code = 200
         return Response(res.code, res.content, res.headers)
 
     def _get_input_data(self, request):
@@ -118,7 +120,7 @@ class Resource(ResourceBase):
 
     def _parse_input_data(self, data, request):
         """ Execute appropriate parser. """
-        return datamapper.parse(data, request, self)
+        return datamapper.decode(data, request, self)
 
     def _is_data_method(self, request):
         """ Return True, if request method is either PUT or POST """

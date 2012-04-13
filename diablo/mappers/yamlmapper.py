@@ -19,8 +19,10 @@ class YamlMapper(DataMapper):
         self.default_flow_style = default_flow_style
 
     def _format_data(self, data, charset):
-        return yaml.dump(data, default_flow_style=self.default_flow_style,
-                         encoding=charset)
+        try:
+            return yaml.dump(data)
+        except TypeError, err:
+            raise http.InternalServerError('unable to encode data')
 
     def _parse_data(self, data, charset):
         return yaml.load(data) 

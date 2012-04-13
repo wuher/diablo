@@ -30,7 +30,8 @@ class RESTApi(Resource):
             mod = __import__(modname)
             return getattr(mod, clsname)
         else:
-            return globals(clsname)
+            return globals()[clsname]
+            #return globals(clsname)
 
     def _splitModClassNames(self, resource_name):
         """  """

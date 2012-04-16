@@ -18,6 +18,7 @@ from diablo.http import BadRequest, NotFound
 
 class DiabloDummyRequest(DummyRequest):
 
+    code = OK
     data = ''
 
     def read(self):
@@ -39,11 +40,11 @@ class DiabloTestResource(Resource):
         else:
             return self.collection
 
-    def put(self, request, data, *args, **kw):
+    def put(self, data, request, *args, **kw):
         for k in data:
             self.collection[k] = data[k]
 
-    def post(self, request, data, *args, **kw):
+    def post(self, data, request, *args, **kw):
         for k in data:
             self.collection[k] = data[k]
 
@@ -135,7 +136,7 @@ class PutResourceTest(unittest.TestCase):
             self.assertEquals(request.responseCode, OK)
         d.addCallback(rendered)
         
-        request2 = DummyRequest([''])
+        request2 = DiabloDummyRequest([''])
         request2.path = '/a/test/resource/key1'
         request2.headers = {'content-type': 'application/json'}
         resource2 = self.api.getChild('/ignored', request2)
@@ -167,7 +168,7 @@ class PostResourceTest(unittest.TestCase):
             self.assertEquals(request.responseCode, OK)
         d.addCallback(rendered)
         
-        request2 = DummyRequest([''])
+        request2 = DiabloDummyRequest([''])
         request2.path = '/a/test/resource/key2'
         request2.headers = {'content-type': 'application/json'}
         resource2 = self.api.getChild('/ignored', request2)
@@ -213,7 +214,7 @@ class DeleteResourceTest(unittest.TestCase):
         return d
 
     def _get_it(self, ignored, key):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/a/test/resource/key3'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/ignored', request)
@@ -236,7 +237,7 @@ class ResourceRoutingTest(unittest.TestCase):
         self.api = RESTApi(routes)
   
     def test_basic_route(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/a/useless/path'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/ignored', request)
@@ -249,7 +250,7 @@ class ResourceRoutingTest(unittest.TestCase):
         return d
 
     def test_re_group_route_wo_group(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/a/useful/path'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/ignored', request)
@@ -262,7 +263,7 @@ class ResourceRoutingTest(unittest.TestCase):
         return d
 
     def test_re_group_route_w_group(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/a/useful/path/1234567890'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/ignored', request)
@@ -275,7 +276,7 @@ class ResourceRoutingTest(unittest.TestCase):
         return d
 
     def test_re_group_route_w_invalid_group(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/a/useful/path/1invalid01'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/ignored', request)
@@ -293,7 +294,7 @@ class ResourceTestCase(unittest.TestCase):
         self.api = RESTApi(routes)
 
     def test_regular_response(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/testregular'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/testregular', request)
@@ -306,7 +307,7 @@ class ResourceTestCase(unittest.TestCase):
         return d
 
     def test_deferred_response(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/testdeferred'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/testdeferred', request)
@@ -325,7 +326,7 @@ class ContentTypeFormatterTestCase(unittest.TestCase):
       self.api = RESTApi(routes)
 
   def test_json_formatter(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/testregular'
         request.headers = {'content-type': 'application/json'}
         resource = self.api.getChild('/testregular', request)
@@ -341,7 +342,7 @@ class ContentTypeFormatterTestCase(unittest.TestCase):
         return d
 
   def test_xml_formatter(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/testregular'
         request.headers = {'content-type': 'text/xml'}
         resource = self.api.getChild('/testregular', request)
@@ -357,7 +358,7 @@ class ContentTypeFormatterTestCase(unittest.TestCase):
         return d
 
   def test_yaml_formatter(self):
-        request = DummyRequest([''])
+        request = DiabloDummyRequest([''])
         request.path = '/testregular'
         request.headers = {'content-type': 'application/yaml'}
         resource = self.api.getChild('/testregular', request)
@@ -379,7 +380,7 @@ class FormatArgTestCase(unittest.TestCase):
     self.api = RESTApi(routes)
 
   def test_json_arg(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular'
         request.args = {'format': ['json']}
         resource = self.api.getChild('/testregular', request)
@@ -395,7 +396,7 @@ class FormatArgTestCase(unittest.TestCase):
         return d
 
   def test_xml_arg(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular'
         request.args = {'format': ['xml']}
         resource = self.api.getChild('/testregular', request)
@@ -411,7 +412,7 @@ class FormatArgTestCase(unittest.TestCase):
         return d
 
   def test_yaml_arg(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular'
         request.args = {'format': ['yaml']}
         resource = self.api.getChild('/testregular', request)
@@ -433,7 +434,7 @@ class UrlFormatTestCase(unittest.TestCase):
     self.api = RESTApi(routes)
 
   def test_json_url(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular.json'
         resource = self.api.getChild('/testregular', request)
         d = _render(resource, request)
@@ -449,7 +450,7 @@ class UrlFormatTestCase(unittest.TestCase):
         return d
 
   def test_xml_url(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular.xml'
         resource = self.api.getChild('/testregular', request)
         d = _render(resource, request)
@@ -465,7 +466,7 @@ class UrlFormatTestCase(unittest.TestCase):
         return d
 
   def test_yaml_url(self):
-        request = DummyRequest([])
+        request = DiabloDummyRequest([])
         request.path = '/testregular.yaml'
         resource = self.api.getChild('/testregular', request)
         d = _render(resource, request)

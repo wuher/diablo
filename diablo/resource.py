@@ -5,21 +5,23 @@
 # Author: Janne Kuuskeri
 #
 
+import functools
+import logging
 
 from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
+from twisted.web import http
 from twisted.web.resource import Resource as ResourceBase
-from twisted.web.http import OK, CREATED
-from .http import HTTPError, Response
+from .http import HTTPError, Response, BadRequest
 import datamapper
 
 
 class Resource(ResourceBase):
     """ Base class for all resources of the REST API. """
 
-    _log = None
     default_mapper = None
     mapper = None
+    log = logging.getLogger('diablo')
 
     """ No child resources.
 
@@ -49,39 +51,59 @@ class Resource(ResourceBase):
         on the request method (get/put/post/...).
         """
 
+        methodname, method = self._getMethod(request)
         try:
-            method = getattr(self, request.method.lower(), None)
             if method:
-                data = self._get_input_data(request)
-                deferred = self._execute(method, request, data)
-                deferred.addCallback(self._createResponse, request)
-                deferred.addErrback(self._errorResponse)
-                deferred.addCallback(self._prepareResponse, request)
+                d = defer.maybeDeferred(
+                    self._executeHandler,
+                    methodname,
+                    method,
+                    request)
+                d.addCallback(self._createResponse, request)
+                d.addErrback(self._errorResponse)
+                d.addCallback(self._prepareResponse, request)
                 return NOT_DONE_YET
             else:
                 # let the base class handle 405
-                ResourceBase.render(self, request)
+                return ResourceBase.render(self, request)
         finally:
-            if self._log:
-                self._log.info('"%s %s" %d' % (
-                    request.method,
-                    request.path,
-                    request.code if method else 501))
-    
-    def _execute(self, method, request, data):
-        """ Actually invoke the handler function
+            self.log.info('"%s %s" %d' % (
+                request.method,
+                request.path,
+                request.code if method else 501))
 
-        Returns a deferred depending on if it is a data method.
+    def _getMethod(self, request):
+        """ Return request method information.
+
+        Returns a tuple with the name of the requested method in lower case
+        and the actual method, or ``None`` if this resource doesn't implement
+        the requested method.
+
+        :returns: tuple of (``method name``, ``method``)
         """
-        if self._is_data_method(request):
-            return defer.maybeDeferred(method, request, data, 
-                                       *self.args, **self.kw)
-        else:
-            return defer.maybeDeferred(method, request, *self.args, **self.kw)
+
+        methodname = request.method.lower()
+        method = getattr(self, methodname, None)
+        return methodname, method
+
+    def _executeHandler(self, methodname, method, request):
+        """ Execute handler.
+
+        First, read and parse the content data.
+        """
+        if methodname in ('put', 'post',):
+            data = self._get_input_data(request)
+            method = functools.partial(method, data)
+        return method(request, *self.args, **self.kw)
 
     def _errorResponse(self, err):
-        """ Create error Response obect. """
-        try: 
+        """ Handle errors.
+
+        If the error is ``HTTPError`` turn it into appropriate http
+        response code.
+        """
+
+        try:
             err.raiseException()
         except HTTPError, error:
             return Response.fromError(error)
@@ -102,16 +124,12 @@ class Resource(ResourceBase):
         """ Create successful Response object. """
         res = datamapper.encode(request, data, self)
         if res.code is 0:
-            res.code = OK
+            res.code = http.OK
 
         return Response(res.code, res.content, res.headers)
 
     def _get_input_data(self, request):
         """ If there is data, parse it, otherwise return None. """
-        # only PUT and POST should provide data
-        if not self._is_data_method(request):
-            return None
-
         content = [row for row in request.read()]
         content = ''.join(content) if content else None
         return self._parse_input_data(content, request) if content else None
@@ -119,11 +137,6 @@ class Resource(ResourceBase):
     def _parse_input_data(self, data, request):
         """ Execute appropriate parser. """
         return datamapper.decode(data, request, self)
-
-    def _is_data_method(self, request):
-        """ Return True, if request method is either PUT or POST """
-        return request.method.upper() in ('PUT', 'POST')
-
 
 #
 # resource.py ends here

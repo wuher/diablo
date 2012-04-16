@@ -9,9 +9,10 @@
 import types
 from decimal import Decimal, InvalidOperation
 import xml.sax.handler
-from django.utils.xmlutils import SimplerXMLGenerator
-from django.utils.encoding import smart_unicode
+
 from diablo.datamapper import DataMapper
+from diablo.util import SimplerXMLGenerator, force_unicode
+
 
 try:
     import cStringIO as StringIO
@@ -69,7 +70,7 @@ class XmlMapper(DataMapper):
         """ Parse the xml data into dictionary. """
 
         builder = TreeBuilder(numbermode=self._numbermode)
-        if isinstance(data,basestring):
+        if isinstance(data, basestring):
             xml.sax.parseString(data, builder)
         else:
             xml.sax.parse(data, builder)
@@ -115,7 +116,7 @@ class XmlMapper(DataMapper):
                 self._to_xml(xml, value, key)
                 xml.endElement(key)
         else:
-            xml.characters(smart_unicode(data))
+            xml.characters(force_unicode(data))
 
     def _root_element_name(self):
         """ Return the name of the xml root element.

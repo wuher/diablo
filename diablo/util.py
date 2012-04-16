@@ -7,6 +7,7 @@
 
 
 import re
+from xml.sax.saxutils import XMLGenerator
 
 charset_pattern = re.compile('.*;\s*charset=(.*)')
 
@@ -216,6 +217,24 @@ def smart_str(s, encoding='utf-8', strings_only=False, errors='strict'):
         return s.decode('utf-8', errors).encode(encoding, errors)
     else:
         return s
+
+
+
+
+## ripped out from django to remove the dependence ##
+"""
+Utilities for XML generation/parsing.
+"""
+
+class SimplerXMLGenerator(XMLGenerator):
+    def addQuickElement(self, name, contents=None, attrs=None):
+        "Convenience method for adding an element with no children"
+        if attrs is None: attrs = {}
+        self.startElement(name, attrs)
+        if contents is not None:
+            self.characters(contents)
+        self.endElement(name)
+
 
 #
 # util.py ends here

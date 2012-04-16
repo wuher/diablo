@@ -5,13 +5,11 @@
 # Author: Janne Kuuskeri
 #
 
-"""
-Diablo Resource 
-"""
 
 from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
 from twisted.web.resource import Resource as ResourceBase
+from twisted.web.http import OK, CREATED
 from .http import HTTPError, Response
 import datamapper
 
@@ -93,7 +91,6 @@ class Resource(ResourceBase):
 
         Set response code, headers and return body as a string.
         """
-
         request.setResponseCode(response.code)
         for key, value in response.headers.items():
             request.setHeader(key, value)
@@ -105,7 +102,8 @@ class Resource(ResourceBase):
         """ Create successful Response object. """
         res = datamapper.encode(request, data, self)
         if res.code is 0:
-            res.code = 200
+            res.code = OK
+
         return Response(res.code, res.content, res.headers)
 
     def _get_input_data(self, request):

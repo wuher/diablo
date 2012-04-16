@@ -6,12 +6,71 @@ from twisted.web.test.test_web import DummyRequest
 from twisted.trial import unittest
 from twisted.internet.defer import succeed
 from twisted.python import log
+from twisted.web.http import OK, CREATED
 
 from diablo.resource import Resource
 from diablo.api import RESTApi
 from diablo.mappers.xmlmapper import XmlMapper
 from diablo.mappers.jsonmapper import JsonMapper
 from diablo.mappers.yamlmapper import YamlMapper
+from diablo.http import BadRequest, NotFound
+
+
+class DiabloDummyRequest(DummyRequest):
+
+    data = ''
+
+    def read(self):
+        return self.data
+
+
+class DiabloTestResource(Resource):
+
+    collection = {}
+
+    def get(self, request, *args, **kw):
+        
+        if kw.has_key('key'):
+            key = kw.get('key')
+            if key in self.collection:    
+                return self.collection[key]
+            else:
+                raise NotFound()
+        else:
+            return self.collection
+
+    def put(self, request, data, *args, **kw):
+        for k in data:
+            self.collection[k] = data[k]
+
+    def post(self, request, data, *args, **kw):
+        for k in data:
+            self.collection[k] = data[k]
+
+    def delete(self, request, *args, **kw):
+        if kw.has_key('key'):
+            key = kw.get('key')
+            if key in self.collection:
+                removed = self.collection.pop(kw['key']) 
+                log.msg('removed', removed)
+            else:
+                raise NotFound()
+        else: 
+            log.msg('removing entire collection')
+            self.collection = {}
+
+
+class RouteTestResource1(Resource):
+
+    def get(self, request, *args, **kw):
+        return {'nothing': 'something'}
+
+
+class RouteTestResource2(Resource):
+
+    def get(self, request, *args, **kw):
+        return {'something': 'nothing'}
+  
 
 regular_result = {'name': 'luke skywalker', 'occupation': 'jedi'}
 
@@ -30,11 +89,10 @@ class DeferredTestResource(Resource):
         reactor.callLater(0, d.callback, deferred_result)
         return d
 
+
 def _render(resource, request):
     result = resource.render(request)
     if isinstance(result, str):
-        #for k, v in request.headers.items():
-        #    request.setHeader(k, v)
         request.write(result)
         request.finish()
         return succeed(None)
@@ -49,6 +107,9 @@ def _render(resource, request):
 routes = [
   ('/testregular(?P<format>\.?\w{1,8})?$', 'test_resource.RegularTestResource'),
   ('/testdeferred(?P<format>\.?\w{1,8})?$', 'test_resource.DeferredTestResource'),
+  ('/a/useless/path$', 'test_resource.RouteTestResource1'),
+  ('/a/useful/path(/)?(?P<tendigit>\d{10})?$', 'test_resource.RouteTestResource2'),
+  ('/a/test/resource(/)?(?P<key>\w{1,10})?$', 'test_resource.DiabloTestResource'),
 ]
 
 params = {'indent': 4,'ensure_ascii': False,'encoding': 'utf-8',}
@@ -57,6 +118,174 @@ xmlMapper = XmlMapper()
 jsonMapper = JsonMapper()
 yamlMapper = YamlMapper()
 
+class PutResourceTest(unittest.TestCase):
+  
+    def setUp(self):
+        self.api = RESTApi(routes)
+
+    def test_put_resource(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'PUT'
+        request.path = '/a/test/resource'
+        request.headers = {'content-type': 'application/json'}
+        request.data = json.dumps({'key1': 'value1'})
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            self.assertEquals(request.responseCode, OK)
+        d.addCallback(rendered)
+        
+        request2 = DummyRequest([''])
+        request2.path = '/a/test/resource/key1'
+        request2.headers = {'content-type': 'application/json'}
+        resource2 = self.api.getChild('/ignored', request2)
+        def doGet(ignored):
+          d2 = _render(resource2, request2)
+          def get_rendered(ignored):
+              response = ''.join(request2.written)
+              response_obj = json.loads(response)
+              self.assertEquals(response_obj, 'value1')
+          d2.addCallback(get_rendered)
+          return d2
+        d.addCallback(doGet)
+        return d
+
+class PostResourceTest(unittest.TestCase):
+  
+    def setUp(self):
+        self.api = RESTApi(routes)
+
+    def test_post_resource(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'POST'
+        request.path = '/a/test/resource'
+        request.headers = {'content-type': 'application/json'}
+        request.data = json.dumps({'key2': 'value2'})
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            self.assertEquals(request.responseCode, OK)
+        d.addCallback(rendered)
+        
+        request2 = DummyRequest([''])
+        request2.path = '/a/test/resource/key2'
+        request2.headers = {'content-type': 'application/json'}
+        resource2 = self.api.getChild('/ignored', request2)
+        def doGet(ignored):
+          d2 = _render(resource2, request2)
+          def get_rendered(ignored):
+              response = ''.join(request2.written)
+              response_obj = json.loads(response)
+              self.assertEquals(response_obj, 'value2')
+          d2.addCallback(get_rendered)
+          return d2
+        d.addCallback(doGet)
+        return d
+
+class DeleteResourceTest(unittest.TestCase):
+  
+    def setUp(self):
+        self.api = RESTApi(routes)
+
+    def _put_something(self, key, val):
+        request = DiabloDummyRequest([''])
+        request.method = 'PUT'
+        request.path = '/a/test/resource'
+        request.headers = {'content-type': 'application/json'}
+        request.data = json.dumps({key: val})
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            self.assertEquals(request.responseCode, OK)
+        d.addCallback(rendered)
+        return d
+
+    def _delete_it(self, ignored, key):
+        request = DiabloDummyRequest([''])
+        request.method = 'DELETE'
+        request.path = '/a/test/resource/key3'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            self.assertEquals(request.responseCode, OK)
+        d.addCallback(rendered)
+        return d
+
+    def _get_it(self, ignored, key):
+        request = DummyRequest([''])
+        request.path = '/a/test/resource/key3'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            self.assertEquals(request.responseCode, NotFound().code)
+        d.addCallback(rendered)
+
+    def test_delete_resource(self):
+        key, val = 'key3', 'val3'
+        d = self._put_something(key, val)
+        d.addCallback(self._delete_it, key)
+        d.addCallback(self._get_it, key)
+        return d
+
+
+class ResourceRoutingTest(unittest.TestCase):
+
+    def setUp(self):
+        self.api = RESTApi(routes)
+  
+    def test_basic_route(self):
+        request = DummyRequest([''])
+        request.path = '/a/useless/path'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            response = ''.join(request.written)
+            response_obj = json.loads(response)
+            self.assertEquals(response_obj, {'nothing': 'something'})
+        d.addCallback(rendered)
+        return d
+
+    def test_re_group_route_wo_group(self):
+        request = DummyRequest([''])
+        request.path = '/a/useful/path'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            response = ''.join(request.written)
+            response_obj = json.loads(response)
+            self.assertEquals(response_obj, {'something': 'nothing'})
+        d.addCallback(rendered)
+        return d
+
+    def test_re_group_route_w_group(self):
+        request = DummyRequest([''])
+        request.path = '/a/useful/path/1234567890'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            response = ''.join(request.written)
+            response_obj = json.loads(response)
+            self.assertEquals(response_obj, {'something': 'nothing'})
+        d.addCallback(rendered)
+        return d
+
+    def test_re_group_route_w_invalid_group(self):
+        request = DummyRequest([''])
+        request.path = '/a/useful/path/1invalid01'
+        request.headers = {'content-type': 'application/json'}
+        resource = self.api.getChild('/ignored', request)
+        d = _render(resource, request)
+        def rendered(ignored):
+            log.msg('ignored', ignored)
+            self.assertEquals(request.responseCode, NotFound().code) 
+        d.addCallback(rendered)
+        return d
+    
 
 class ResourceTestCase(unittest.TestCase):
 

@@ -47,7 +47,7 @@ def get_charset(request):
     """ Extract charset from the content type
     """
 
-    content_type = request.META.get('CONTENT_TYPE', None)
+    content_type = request.getHeader('content-type') or None
     if content_type:
         return extract_charset(content_type) if content_type else None
     else:

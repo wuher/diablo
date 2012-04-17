@@ -40,6 +40,16 @@ class Conflict(HTTPError):
         HTTPError.__init__(self, http.CONFLICT)
 
 
+class InternalServerError(HTTPError):
+    def __init__(self, content=None):
+        HTTPError.__init__(self, http.INTERNAL_SERVER_ERROR)
+
+
+class NotAcceptable(HTTPError):
+    def __init__(self, content=None):
+        HTTPError.__init__(self, http.NOT_ACCEPTABLE)
+
+
 class Response(object):
 
     @classmethod

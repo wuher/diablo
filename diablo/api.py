@@ -21,19 +21,21 @@ class RESTApi(Resource):
 
     def __init__(self, routes):
         """ Compile regexes and create class objects for URL routes. """
-        self._routes = [(re.compile(pattern), self._getResourceClass(clsname)) for pattern, clsname in routes]
+        self._routes = [(re.compile(pattern), self._getResourceClass(clsname)) 
+                        for pattern, clsname in routes]
         Resource.__init__(self)
 
     def _getResourceClass(self, clsname):
+        """ load the resource """
         modname, clsname = self._splitModClassNames(clsname)
         if modname:
             mod = __import__(modname)
             return getattr(mod, clsname)
         else:
-            return globals(clsname)
+            return globals()[clsname]
 
     def _splitModClassNames(self, resource_name):
-        """  """
+        """ Split the module from the resource name """
         try:
             dot_index = resource_name.rindex('.')
         except ValueError:

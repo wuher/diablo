@@ -7,9 +7,9 @@
 
 
 try: 
-  import json
+  import simplejson
 except:
-  import simplejson as json
+  import json
 
 from diablo.datamapper import DataMapper
 from diablo import http

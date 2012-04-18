@@ -100,9 +100,9 @@ class DataMapper(object):
 
         :return: diablo's ``Response``
         """
-        headers = {'Content-Type': self._get_content_type(), 
+        headers = {'Content-Type': self._get_content_type(),
                    'Content-Length': len(response.content)}
-   
+
         res = Response(content=response.content, headers=headers)
         # status_code is set separately to allow zero
         res.code = response.code

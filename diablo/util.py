@@ -44,6 +44,7 @@ def extract_charset(content_type):
     match = charset_pattern.match(content_type)
     return match.group(1) if match else None
 
+
 def get_charset(request):
     """ Extract charset from the content type
     """
@@ -141,6 +142,7 @@ def is_protected_type(obj):
         float, Decimal)
     )
 
+
 # removing the dependency on django's encoding util
 # for now this is pretty much just ripped straight from django
 # removing any django specific elements
@@ -188,6 +190,7 @@ def force_unicode(s, encoding='utf-8', strings_only=False, errors='strict'):
             s = ' '.join([force_unicode(arg, encoding, strings_only,
                     errors) for arg in s])
     return s
+
 
 # removing the dependency on django's encoding util
 # for now this is pretty much just ripped straight from django

@@ -33,7 +33,7 @@ class JsonMapper(DataMapper):
         else:
             params = {
                 'indent': 4,
-                'ensure_ascii': False,
+                'ensure_ascii': True,
                 'encoding': charset,
                 }
             self._maybe_add_use_decimal(params)

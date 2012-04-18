@@ -6,7 +6,8 @@
 #
 
 
-import re
+import re, types, datetime
+from decimal import Decimal
 from xml.sax.saxutils import XMLGenerator
 
 charset_pattern = re.compile('.*;\s*charset=(.*)')
@@ -151,6 +152,11 @@ def force_unicode(s, encoding='utf-8', strings_only=False, errors='strict'):
 
     If strings_only is True, don't convert (some) non-string-like objects.
     """
+
+    # from django 1.3.1
+    if isinstance(s, unicode):
+        return s
+
     if strings_only and is_protected_type(s):
         return s
     try:

@@ -21,7 +21,7 @@ class RESTApi(Resource):
 
     def __init__(self, routes):
         """ Compile regexes and create class objects for URL routes. """
-        self._routes = [(re.compile(pattern), self._getResourceClass(clsname)) 
+        self._routes = [(re.compile(pattern), self._getResourceClass(clsname))
                         for pattern, clsname in routes]
         Resource.__init__(self)
 
@@ -40,7 +40,7 @@ class RESTApi(Resource):
             dot_index = resource_name.rindex('.')
         except ValueError:
             return '', resource_name
-        return resource_name[:dot_index], resource_name[dot_index+1:]
+        return resource_name[:dot_index], resource_name[dot_index + 1:]
 
     def _toggleTrailingSlash(self, url):
         """ Toggle trailing slash

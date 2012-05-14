@@ -17,37 +17,37 @@ class HTTPError(Exception):
 
 class MethodNotAllowed(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.NOT_ALLOWED)
+        HTTPError.__init__(self, http.NOT_ALLOWED, content)
 
 
 class Forbidden(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.NOT_ALLOWED)
+        HTTPError.__init__(self, http.NOT_ALLOWED, content)
 
 
 class NotFound(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.NOT_FOUND)
+        HTTPError.__init__(self, http.NOT_FOUND, content)
 
 
 class BadRequest(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.BAD_REQUEST)
+        HTTPError.__init__(self, http.BAD_REQUEST, content)
 
 
 class Conflict(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.CONFLICT)
+        HTTPError.__init__(self, http.CONFLICT, content)
 
 
 class InternalServerError(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.INTERNAL_SERVER_ERROR)
+        HTTPError.__init__(self, http.INTERNAL_SERVER_ERROR, content)
 
 
 class NotAcceptable(HTTPError):
     def __init__(self, content=None):
-        HTTPError.__init__(self, http.NOT_ACCEPTABLE)
+        HTTPError.__init__(self, http.NOT_ACCEPTABLE, content)
 
 
 class Response(object):

@@ -10,14 +10,14 @@ from twisted.web.test.test_web import DummyRequest
 from twisted.trial import unittest
 from twisted.internet.defer import succeed
 from twisted.python import log
-from twisted.web.http import OK
+from twisted.web.http import OK, NOT_FOUND, INTERNAL_SERVER_ERROR, CONFLICT
 
 from diablo.resource import Resource
 from diablo.api import RESTApi
 from diablo.mappers.xmlmapper import XmlMapper
 from diablo.mappers.jsonmapper import JsonMapper
 from diablo.mappers.yamlmapper import YamlMapper
-from diablo.http import NotFound
+from diablo.http import NotFound, Response, Conflict
 
 
 class DiabloDummyRequest(DummyRequest):
@@ -96,6 +96,27 @@ class DeferredTestResource(Resource):
         return d
 
 
+class ErrorResource(Resource):
+    """ Resource to test error scenarios. """
+
+    def get(self, request, id, *args, **kw):
+        self.error_id = int(id)
+        if self.error_id is 1:
+            raise NotFound("Can't find it, sorry.")
+        elif self.error_id is 2:
+            raise Exception('Unknown exception.')
+        else:
+            return {'id': 9}
+
+    def _processResponse(self, request, response):
+        if self.error_id is 3:
+            raise Conflict("There's a conflict my friend.")
+        elif self.error_id is 4:
+            raise TypeError('Bad type.')
+        else:
+            return Response(code=OK, content='hiihoo')
+
+
 def _render(resource, request):
     result = resource.render(request)
     if isinstance(result, str):
@@ -117,6 +138,7 @@ routes = [
     ('/a/useless/path$', 'test_resource.RouteTestResource1'),
     ('/a/useful/path(/)?(?P<tendigit>\d{10})?$', 'test_resource.RouteTestResource2'),
     ('/a/test/resource(/)?(?P<key>\w{1,10})?$', 'test_resource.DiabloTestResource'),
+    ('/error/(?P<err_id>\d{1,2})', 'test_resource.ErrorResource'),
 ]
 
 
@@ -184,6 +206,7 @@ class PostResourceTest(unittest.TestCase):
 
         def rendered(ignored):
             self.assertEquals(request.responseCode, OK)
+            self.assertEquals({'key2': 'value2'}, resource.collection)
         d.addCallback(rendered)
 
         request2 = DiabloDummyRequest([''])
@@ -505,6 +528,7 @@ class UrlFormatTestCase(unittest.TestCase):
 
     def test_yaml_url(self):
         request = DiabloDummyRequest([])
+        request.method = 'GET'
         request.path = '/testregular.yaml'
         resource = self.api.getChild('/testregular', request)
         d = _render(resource, request)
@@ -519,6 +543,68 @@ class UrlFormatTestCase(unittest.TestCase):
             self.assertEquals(content_type, 'application/yaml')
         d.addCallback(rendered)
         return d
+
+
+class TestErrors(unittest.TestCase):
+    def setUp(self):
+        self.api = RESTApi(routes)
+
+    def test_exec_handler_fails_http(self):
+        request = DiabloDummyRequest([])
+        request.method = 'GET'
+        request.path = '/error/1'
+        resource = self.api.getChild('/error/1', request)
+        d = _render(resource, request)
+
+        def rendered(ignored):
+            response = ''.join(request.written)
+            self.assertEquals(NOT_FOUND, request.responseCode)
+            self.assertEquals("Can't find it, sorry.", response)
+        d.addCallback(rendered)
+        return d
+
+    def test_exec_handler_fails_unknown(self):
+        request = DiabloDummyRequest([])
+        request.method = 'GET'
+        request.path = '/error/2'
+        resource = self.api.getChild('/error/2', request)
+        d = _render(resource, request)
+
+        def rendered(ignored):
+            response = ''.join(request.written)
+            self.assertEquals(INTERNAL_SERVER_ERROR, request.responseCode)
+            self.assertEquals("Unknown exception.", response)
+        d.addCallback(rendered)
+        return d
+
+    def test_processing_fails_http(self):
+        request = DiabloDummyRequest([])
+        request.method = 'GET'
+        request.path = '/error/3'
+        resource = self.api.getChild('/error/3', request)
+        d = _render(resource, request)
+
+        def rendered(ignored):
+            response = ''.join(request.written)
+            self.assertEquals(CONFLICT, request.responseCode)
+            self.assertEquals("There's a conflict my friend.", response)
+        d.addCallback(rendered)
+        return d
+
+    def test_processing_fails_unknown(self):
+        request = DiabloDummyRequest([])
+        request.method = 'GET'
+        request.path = '/error/4'
+        resource = self.api.getChild('/error/4', request)
+        d = _render(resource, request)
+
+        def rendered(ignored):
+            response = ''.join(request.written)
+            self.assertEquals(INTERNAL_SERVER_ERROR, request.responseCode)
+            self.assertEquals("Bad type.", response)
+        d.addCallback(rendered)
+        return d
+
 
 #
 #  test_resource.py ends here

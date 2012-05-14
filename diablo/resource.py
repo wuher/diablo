@@ -54,14 +54,17 @@ class Resource(ResourceBase):
         methodname, method = self._getMethod(request)
         try:
             if method:
+                data = self._getInputData(request)
                 d = defer.maybeDeferred(
                     self._executeHandler,
                     methodname,
                     method,
+                    data,
                     request)
-                d.addCallback(self._createResponse, request)
-                d.addErrback(self._errorResponse)
-                d.addCallback(self._prepareResponse, request)
+                d.addCallback(self._processResponse, request)
+                d.addErrback(self._httpError)
+                d.addErrback(self._unknownError)
+                d.addCallback(self._writeResponse, request)
                 return NOT_DONE_YET
             else:
                 # let the base class handle 405
@@ -86,33 +89,105 @@ class Resource(ResourceBase):
         method = getattr(self, methodname, None)
         return methodname, method
 
-    def _executeHandler(self, methodname, method, request):
+    def _executeHandler(self, methodname, method, data, request):
         """ Execute handler.
 
         First, read and parse the content data.
         """
+
         if methodname in ('put', 'post',):
-            data = self._get_input_data(request)
             method = functools.partial(method, data)
         return method(request, *self.args, **self.kw)
 
-    def _errorResponse(self, err):
-        """ Handle errors.
+    def _httpError(self, failure):
+        """ event: error in ``_executeHandler`` or ``_processResponse``.
 
-        If the error is ``HTTPError`` turn it into appropriate http
-        response code.
+        Handles ``HTTPError``s and propagates others to next errback.
         """
 
-        try:
-            err.raiseException()
-        except HTTPError, error:
-            return Response.fromError(error)
+        failure.trap(HTTPError)
+        return self._getErrorResponse(failure.value)
 
-    def _prepareResponse(self, response, request):
+    def _unknownError(self, failure):
+        """ event: error in ``_executeHandler`` or ``_processResponse``.
+
+        Handles everything that ``_httpError`` doesn't (i.e. all other
+        exceptions besides ``HTTPError``s).
+        """
+
+        return self._getUnknownErrorResponse(failure.value)
+
+    def _getErrorResponse(self, exc):
+        """ Turn ``HTTPError`` into appropriate ``Response``.
+
+        :returns: ``diablo.Response``
+        """
+
+        content = exc.content or ''
+        return Response(code=exc.code, content=content)
+
+    def _getUnknownErrorResponse(self, exc):
+        """ Turn unknown error into ``Response``.
+
+        :returns: ``diablo.Response``
+        """
+
+        return Response(code=http.INTERNAL_SERVER_ERROR, content=str(exc))
+
+    def _processResponse(self, response, request):
+        """ Process the response returned by the resource.
+
+        The response needs to be serialized, validated and formatted using
+        appropriate datamapper.
+
+        :returns: ``diablo.Response``
+        """
+
+        def coerce_response():
+            """ Coerce the response object into diable structure. """
+            if not isinstance(response, Response):
+                return Response(0, response)
+            return response
+
+        diablo_res = coerce_response()
+        if diablo_res.content and diablo_res.code in (0, 200, 201):
+            # serialize, format and validate
+            serialized_res = diablo_res.content = self._serializeObject(diablo_res.content, request)
+            formatted_res = self._formatResponse(request, diablo_res)
+            self._validateOutputData(response, serialized_res, formatted_res, request)
+        else:
+            # no data -> format only
+            formatted_res = self._formatResponse(request, diablo_res)
+        return formatted_res
+
+    def _serializeObject(self, data, request):
+        """ todo: implement """
+        return data
+
+    def _validateOutputData(
+        self, original_res, serialized_res, formatted_res, request):
+        """ todo: implement """
+        pass
+
+    def _formatResponse(self, request, response):
+        """ Format the response using a datamapper.
+
+        :returns: ``diablo.Response``
+        """
+
+        # content
+        response = datamapper.encode(request, response.content, self)
+        # status code
+        if response.code is 0:
+            response.code = http.OK
+        return response
+
+    def _writeResponse(self, response, request):
         """ Prepare the HTTP response.
 
         Set response code, headers and return body as a string.
         """
+
         request.setResponseCode(response.code)
         for key, value in response.headers.items():
             request.setHeader(key, value)
@@ -120,15 +195,7 @@ class Resource(ResourceBase):
         request.finish()
         return NOT_DONE_YET
 
-    def _createResponse(self, data, request):
-        """ Create successful Response object. """
-        res = datamapper.encode(request, data, self)
-        if res.code is 0:
-            res.code = http.OK
-
-        return Response(res.code, res.content, res.headers)
-
-    def _get_input_data(self, request):
+    def _getInputData(self, request):
         """ If there is data, parse it, otherwise return None. """
         content = [row for row in request.read()]
         content = ''.join(content) if content else None

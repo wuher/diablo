@@ -55,6 +55,8 @@ class Resource(ResourceBase):
         try:
             if method:
                 data = self._getInputData(request)
+                data = self._validateInputData(data, request)
+                data = self._createObject(data, request)
                 d = defer.maybeDeferred(
                     self._executeHandler,
                     methodname,
@@ -160,7 +162,11 @@ class Resource(ResourceBase):
             formatted_res = self._formatResponse(request, diablo_res)
         return formatted_res
 
-    def _serializeObject(self, data, request):
+    def _validateInputData(self, data, request):
+        """ todo: implement """
+        return data
+
+    def _createObject(self, data, request):
         """ todo: implement """
         return data
 
@@ -168,6 +174,10 @@ class Resource(ResourceBase):
         self, original_res, serialized_res, formatted_res, request):
         """ todo: implement """
         pass
+
+    def _serializeObject(self, data, request):
+        """ todo: implement """
+        return data
 
     def _formatResponse(self, request, response):
         """ Format the response using a datamapper.

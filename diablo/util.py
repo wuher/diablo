@@ -6,7 +6,9 @@
 #
 
 
-import re, types, datetime
+import re
+import types
+import datetime
 from decimal import Decimal
 from xml.sax.saxutils import XMLGenerator
 

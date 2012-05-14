@@ -316,9 +316,11 @@ class DataMapperManager(object):
 # singleton instance
 manager = DataMapperManager()
 
+
 # utility function to format outgoing data (selects formatter automatically)
 def encode(request, response, resource):
     return manager.select_encoder(request, resource).encode(response)
+
 
 # utility function to parse incoming data (selects parser automatically)
 def decode(data, request, resource):

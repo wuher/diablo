@@ -25,6 +25,10 @@ class DiabloDummyRequest(DummyRequest):
     code = OK
     data = ''
 
+    def __init__(self, *args, **kw):
+        DummyRequest.__init__(self, *args, **kw)
+        self.content = self
+
     def read(self):
         return self.data
 

@@ -207,7 +207,7 @@ class Resource(ResourceBase):
 
     def _getInputData(self, request):
         """ If there is data, parse it, otherwise return None. """
-        content = [row for row in request.read()]
+        content = [row for row in request.content.read()] if request.content else None
         content = ''.join(content) if content else None
         return self._parse_input_data(content, request) if content else None
 

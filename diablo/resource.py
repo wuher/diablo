@@ -186,7 +186,7 @@ class Resource(ResourceBase):
         """
 
         # content
-        response = datamapper.encode(request, response.content, self)
+        response = datamapper.encode(request, response, self)
         # status code
         if response.code is 0:
             response.code = http.OK

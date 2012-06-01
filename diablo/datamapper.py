@@ -100,6 +100,7 @@ class DataMapper(object):
 
         :return: diablo's ``Response``
         """
+
         headers = {'Content-Type': self._get_content_type(),
                    'Content-Length': len(response.content)}
 

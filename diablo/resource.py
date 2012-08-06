@@ -22,6 +22,7 @@ class Resource(ResourceBase):
     default_mapper = None
     mapper = None
     log = logging.getLogger('diablo')
+    datalog = logging.getLogger('diablo.data')
 
     """ No child resources.
 
@@ -108,7 +109,9 @@ class Resource(ResourceBase):
         """
 
         failure.trap(HTTPError)
-        return self._getErrorResponse(failure.value)
+        res = self._getErrorResponse(failure.value)
+        self.log.error(str(res))
+        return res
 
     def _unknownError(self, failure):
         """ event: error in ``_executeHandler`` or ``_processResponse``.
@@ -117,7 +120,9 @@ class Resource(ResourceBase):
         exceptions besides ``HTTPError``s).
         """
 
-        return self._getUnknownErrorResponse(failure.value)
+        res = self._getUnknownErrorResponse(failure.value)
+        self.log.error(failure.getTraceback())
+        return res
 
     def _getErrorResponse(self, exc):
         """ Turn ``HTTPError`` into appropriate ``Response``.
@@ -201,6 +206,7 @@ class Resource(ResourceBase):
         request.setResponseCode(response.code)
         for key, value in response.headers.items():
             request.setHeader(key, value)
+        self.datalog.info('>> "%s"' % ((response.content if response.content else ''),))
         request.write(response.content)
         request.finish()
         return NOT_DONE_YET
@@ -209,6 +215,7 @@ class Resource(ResourceBase):
         """ If there is data, parse it, otherwise return None. """
         content = [row for row in request.content.read()] if request.content else None
         content = ''.join(content) if content else None
+        self.datalog.info('<< "%s"' % ((content if content else ''),))
         return self._parse_input_data(content, request) if content else None
 
     def _parse_input_data(self, data, request):

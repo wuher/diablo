@@ -12,7 +12,7 @@ from twisted.internet import defer
 from twisted.web.server import NOT_DONE_YET
 from twisted.web import http
 from twisted.web.resource import Resource as ResourceBase
-from .http import HTTPError, Response
+from .http import HTTPError, Response, Unauthorized, Forbidden
 import datamapper
 
 
@@ -21,6 +21,9 @@ class Resource(ResourceBase):
 
     default_mapper = None
     mapper = None
+    authentication = None
+    allow_anonymous = True
+
     log = logging.getLogger('diablo')
     datalog = logging.getLogger('diablo.data')
 
@@ -55,10 +58,11 @@ class Resource(ResourceBase):
         methodname, method = self._getMethod(request)
         try:
             if method:
+                d = defer.maybeDeferred(self._authenticate, request)
                 data = self._getInputData(request)
                 data = self._validateInputData(data, request)
                 data = self._createObject(data, request)
-                d = defer.maybeDeferred(
+                d.addCallback(
                     self._executeHandler,
                     methodname,
                     method,
@@ -78,6 +82,29 @@ class Resource(ResourceBase):
                 request.path,
                 request.code if method else 501))
 
+    def _authenticate(self, request):
+        """ Authenticates the request if authentication is specified.
+
+        If authentication succeeds, username is stored in `request.user`.
+
+        :returns: username or `deferred`
+        """
+
+        def anonymous_access(exc_obj):
+            """ Check whether anonymous access is allowed. """
+            if not request.user and not self.allow_anonymous:
+                raise exc_obj
+
+        request.user = None
+        if self.authentication:
+            try:
+                request.user = self.authentication.authenticate(request)
+            except Unauthorized, exc:
+                anonymous_access(exc)
+        else:
+            anonymous_access(Forbidden())
+        return request.user
+
     def _getMethod(self, request):
         """ Return request method information.
 
@@ -92,7 +119,7 @@ class Resource(ResourceBase):
         method = getattr(self, methodname, None)
         return methodname, method
 
-    def _executeHandler(self, methodname, method, data, request):
+    def _executeHandler(self, username, methodname, method, data, request):
         """ Execute handler.
 
         First, read and parse the content data.
@@ -130,8 +157,16 @@ class Resource(ResourceBase):
         :returns: ``diablo.Response``
         """
 
-        content = exc.content or ''
-        return Response(code=exc.code, content=content)
+        if exc.code == http.UNAUTHORIZED:
+            return self._getAuthFailedResponse(exc)
+        else:
+            content = exc.content or ''
+            return Response(code=exc.code, content=content)
+
+    def _getAuthFailedResponse(self, exc):
+        """ Return HTTP response for when auth failed. """
+
+        return self.authentication.auth_failed(exc)
 
     def _getUnknownErrorResponse(self, exc):
         """ Turn unknown error into ``Response``.
@@ -216,9 +251,9 @@ class Resource(ResourceBase):
         content = [row for row in request.content.read()] if request.content else None
         content = ''.join(content) if content else None
         self.datalog.info('<< "%s"' % ((content if content else ''),))
-        return self._parse_input_data(content, request) if content else None
+        return self._parseInputData(content, request) if content else None
 
-    def _parse_input_data(self, data, request):
+    def _parseInputData(self, data, request):
         """ Execute appropriate parser. """
         return datamapper.decode(data, request, self)
 

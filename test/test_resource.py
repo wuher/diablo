@@ -3,6 +3,7 @@
 #
 
 import json
+import base64
 
 from twisted.internet import defer, reactor
 from twisted.web import server
@@ -14,6 +15,7 @@ from twisted.web.http import OK, NOT_FOUND, INTERNAL_SERVER_ERROR, CONFLICT
 
 from diablo.resource import Resource
 from diablo.api import RESTApi
+from diablo.auth import HttpBasic, register_authenticator
 from diablo.mappers.xmlmapper import XmlMapper
 from diablo.mappers.jsonmapper import JsonMapper
 from diablo.mappers.yamlmapper import YamlMapper
@@ -31,6 +33,23 @@ class DiabloDummyRequest(DummyRequest):
 
     def read(self):
         return self.data
+
+
+class UnaccessibleResource(Resource):
+
+    allow_anonymous = False
+
+    def get(self, request):
+        return 'you will never see this'
+
+
+class AuthenticatedResource(Resource):
+
+    allow_anonymous = False
+    authentication = HttpBasic()
+
+    def get(self, request):
+        return 'hello %s' % (request.user,)
 
 
 class DiabloTestResource(Resource):
@@ -137,6 +156,8 @@ def _render(resource, request):
 
 
 routes = [
+    ('/auth/unaccessible', 'test_resource.UnaccessibleResource'),
+    ('/auth/normal', 'test_resource.AuthenticatedResource'),
     ('/testregular(?P<format>\.?\w{1,8})?$', 'test_resource.RegularTestResource'),
     ('/testdeferred(?P<format>\.?\w{1,8})?$', 'test_resource.DeferredTestResource'),
     ('/a/useless/path$', 'test_resource.RouteTestResource1'),
@@ -156,6 +177,81 @@ params = {
 xmlMapper = XmlMapper()
 jsonMapper = JsonMapper()
 yamlMapper = YamlMapper()
+
+
+class AuthResourceTest(unittest.TestCase):
+    passwd = {
+        'jedi': 'jedixx',
+        'sith': 'sithxx'
+    }
+
+    def check_creds(self, username, password):
+        passwd = self.passwd.get(username, None)
+        return passwd == password
+
+    def get_auth_header(self, username, password):
+        credsz = base64.b64encode('%s:%s' % (username, password))
+        return {
+            'authorization': 'Basic %s' % (credsz,)
+        }
+
+    def setUp(self):
+        self.api = RESTApi(routes)
+        register_authenticator(self.check_creds)
+
+    def test_get_unaccessible(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'GET'
+        request.path = '/auth/unaccessible'
+        resource = self.api.getChild('/', request)
+        d = _render(resource, request)
+
+        def renderer(ignored):
+            self.assertEquals(request.responseCode, 403)
+
+        d.addCallback(renderer)
+
+    def test_get_jedi_fail(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'GET'
+        request.path = '/auth/normal'
+        request.headers = self.get_auth_header('jedi', 'jedi')
+
+        resource = self.api.getChild('/', request)
+        d = _render(resource, request)
+
+        def renderer(ignored):
+            self.assertEquals(403, request.responseCode)
+
+        d.addCallback(renderer)
+
+    def test_get_jedi_ok(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'GET'
+        request.path = '/auth/normal'
+        request.headers = self.get_auth_header('jedi', 'jedixx')
+
+        resource = self.api.getChild('/', request)
+        d = _render(resource, request)
+
+        def renderer(ignored):
+            self.assertEquals(200, request.responseCode)
+
+        d.addCallback(renderer)
+
+    def test_get_anonymous(self):
+        request = DiabloDummyRequest([''])
+        request.method = 'GET'
+        request.path = '/auth/normal'
+        # request.headers = self.get_auth_header('jedi', 'jedixx')
+
+        resource = self.api.getChild('/', request)
+        d = _render(resource, request)
+
+        def renderer(ignored):
+            self.assertEquals(401, request.responseCode)
+
+        d.addCallback(renderer)
 
 
 class PutResourceTest(unittest.TestCase):

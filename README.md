@@ -4,17 +4,12 @@ Diablo aims to be simple to use REST framework for [Twisted][1]. Ultimately
 diablo should incorporate pretty much the same functionality as its big
 brother, the [Devil][2].
 
-Currently, only main features are Django style [URL routing][3] and
-appropriate method invocation based on the HTTP request's method.
+Currently diablo provides following features:
 
-
-## Todo
-
-Next big todo is content type negotiation. Currently, diablo only supports
-json. For incoming data diablo doesn't do anything, but for outgoing data,
-everything is encoded (by diablo) into json. Therefore resources must always
-either raise one of the exceptions derived from `diablo.http.HTTPError` or
-return a dictionary that can be encoded into json.
+  * Django style [URL routing][3] 
+  * Method dispatching (invoke appropriate handler function based on HTTP method)
+  * Automatic content type negotiation
+  * Support for authentication (only HTTP Basic out of the box)
 
 
 ## Example

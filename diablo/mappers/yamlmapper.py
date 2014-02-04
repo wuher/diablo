@@ -5,8 +5,6 @@
 # Author: Patrick Hull
 #
 
-import yaml
-
 from diablo.datamapper import DataMapper
 from diablo import http
 
@@ -19,12 +17,14 @@ class YamlMapper(DataMapper):
         self.default_flow_style = default_flow_style
 
     def _format_data(self, data, charset):
+        import yaml
         try:
             return yaml.dump(data)
-        except TypeError, err:
+        except TypeError:
             raise http.InternalServerError('unable to encode data')
 
     def _parse_data(self, data, charset):
-        return yaml.load(data) 
-       
- 
+        import yaml
+        return yaml.load(data)
+
+
